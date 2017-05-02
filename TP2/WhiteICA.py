@@ -10,8 +10,6 @@ import skimage.io
 from sklearn.decomposition import FastICA
 
 
-
-
 imageSize = [256, 256]
 
 def truncateNonNeg (X):
@@ -21,7 +19,7 @@ def truncateNonNeg (X):
     Returns:
         Y(numpy.array): array with positive or zero numbers
     """
-    return map(lambda x: x < 0 ? x : x, X)
+    return map(lambda x: x if x > 0 else 0, X)
 
 def getPowerSpectrumWhiteningFilter (averagePS, noiseVariance):
     """Function that estimates the whitening and denoising power spectrum filter
@@ -31,7 +29,7 @@ def getPowerSpectrumWhiteningFilter (averagePS, noiseVariance):
     Returns:
         w(numpy.array): whitening denoising filter
     """
-
+    return np.trunc((averagePS - 64 ** 2 * noiseVariance) / averagePS) / np.sqrt(averagePS)
 
 def getAveragePSWhitenImages (inputDirectory, sampleSize,whiteningFilter):
     """ Function that estimates the average power spectrum of a image database

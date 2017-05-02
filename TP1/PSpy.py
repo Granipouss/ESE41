@@ -35,7 +35,12 @@ def getSampleImage (image, sampleSize, topLeftCorner):
     """
     return image[topLeftCorner[0]:topLeftCorner[0] + sampleSize[0], topLeftCorner[1]:topLeftCorner[1] + sampleSize[1]]
 
-def getSamplePS(sample):
+def getRandomSampleImage (image, sampleSize):
+    Xmax = imageSize[0] - sampleSize[0]
+    Ymax = imageSize[1] - sampleSize[1]
+    return getSampleImage(image, sampleSize, getSampleTopLeftCorner(0, Xmax, 0, Ymax))
+
+def getSamplePS (sample):
     """ Function that calculates the power spectrum of a image sample
     Args:
         sample (numpy.array): image sample
@@ -43,9 +48,10 @@ def getSamplePS(sample):
         samplePS (numpy.array): power spectrum of the sample. The axis are shifted such the low frequencies are in the center of the array (see scipy.ffpack.fftshift)
     """
     F1 = scipy.fftpack.fft2(sample)
-    return np.abs(scipy.fftpack.fftshift(F1)**2)
+    F2 = np.abs(scipy.fftpack.fftshift(F1)**2)
+    return np.matrix(F2)
 
-def getAveragePS(inputDirectory, sampleSize):
+def getAveragePS (inputDirectory, sampleSize):
     """ Function that estimates the average power spectrum of a image database
     Args:
         inputDirectory (str) : Absolute pathway to the image database
@@ -54,16 +60,13 @@ def getAveragePS(inputDirectory, sampleSize):
         averagePS (numpy.array): average power spectrum of the database samples. The axis are shifted such the low frequencies are in the center of the array (see scipy.ffpack.fftshift)
     """
     averagePS = np.zeros(shape=sampleSize)
-    Xmax = imageSize[0] - sampleSize[0]
-    Ymax = imageSize[1] - sampleSize[1]
     listOfFiles = os.listdir(inputDirectory)
     for i in range(len(listOfFiles)):
         inputFileName = inputDirectory + listOfFiles[i]
-        # print inputFileName
+        print inputFileName
         img = skimage.io.imread(inputFileName)
-        smp = getSampleImage(img, sampleSize, getSampleTopLeftCorner(0, Xmax, 0, Ymax))
-        ps = np.matrix(getSamplePS(smp))
-        averagePS = averagePS + ps
+        smp = getRandomSampleImage(img, sampleSize)
+        averagePS += getSamplePS(smp)
     return averagePS / len(listOfFiles)
 
 
@@ -89,7 +92,19 @@ def getRadialPS(averagePS):
     Returns:
         averagePSRadial (numpy.array): average radial power spectrum of the database samples.
     """
-
+    size = averagePS.shape
+    radialFreq = getRadialFreq(size)
+    amount = dict( (f, 0) for f in radialFreq )
+    value = dict( (f, 0) for f in radialFreq )
+    fx = np.fft.fftshift(np.fft.fftfreq(size[0], 1./size[0]))
+    fy = np.fft.fftshift(np.fft.fftfreq(size[1], 1./size[1]))
+    for x in range(size[0]):
+        for y in range(size[1]):
+            f = np.sqrt(fx[x]**2 + fy[y]**2)
+            if (f != 0):
+                amount[f] += 1
+                value[f] += averagePS[x, y]
+    return [value[f] / amount[f] for f in radialFreq]
 
 
 def getAveragePSLocal(inputDirectory, sampleSize, gridSize):
@@ -126,7 +141,7 @@ def makeAveragePSFigure (averagePS, figureFileName):
     pylab.axis("off")
     pylab.savefig(figureFileName)
 
-def makeAveragePSRadialFigure(radialFreq,averagePSRadial,figureFileName):
+def makeAveragePSRadialFigure (radialFreq,averagePSRadial,figureFileName):
     """ Function that makes and save the figure with the power spectrum
     Args:
         averagePS (numpy.array) : the average power spectrum
@@ -134,7 +149,7 @@ def makeAveragePSRadialFigure(radialFreq,averagePSRadial,figureFileName):
         figureFileName (str): absolute path where the figure will be saved
     """
     pylab.figure()
-    pylab.loglog(radialFreq,averagePSRadial,'.')
+    pylab.loglog(radialFreq, averagePSRadial, '.')
     pylab.xlabel("Frequecy")
     pylab.ylabel("Radial Power Spectrum")
     pylab.savefig(figureFileName)

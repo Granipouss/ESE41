@@ -8,8 +8,8 @@ import numpy as np
 
 
 inputDirectory = "../img/"
-resultsDirectory = "/put/your/TD1/results/directory/absolute/path/here/"
-resultsTD1Directory = "/put/your/results/directory/absolute/path/here"
+resultsDirectory = "./res/"
+resultsTD1Directory = "../TP/res/"
 
 averagePSResultsFileName = resultsTD1Directory + "averagePS.hdf5"
 
