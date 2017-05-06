@@ -19,7 +19,7 @@ def truncateNonNeg (X):
     Returns:
         Y(numpy.array): array with positive or zero numbers
     """
-    return map(lambda x: x if x > 0 else 0, X)
+    return X.clip(0)
 
 def getPowerSpectrumWhiteningFilter (averagePS, noiseVariance):
     """Function that estimates the whitening and denoising power spectrum filter
@@ -29,37 +29,51 @@ def getPowerSpectrumWhiteningFilter (averagePS, noiseVariance):
     Returns:
         w(numpy.array): whitening denoising filter
     """
-    return np.trunc((averagePS - 64 ** 2 * noiseVariance) / averagePS) / np.sqrt(averagePS)
+    sM = noiseVariance * (averagePS.shape[0] * averagePS.shape[1])
+    denoising = ((averagePS - sM) / averagePS).clip(0)
+    whitening = (1 / np.sqrt(averagePS))
+    return whitening * denoising
+    # return np.real(np.fft.ifft(truncateNonNeg(((averagePS - sM) / averagePS) / np.sqrt(averagePS))))
 
-def getAveragePSWhitenImages (inputDirectory, sampleSize,whiteningFilter):
+def getAveragePSWhitenImages (inputDirectory, sampleSize, whiteningFilter):
     """ Function that estimates the average power spectrum of a image database
     Args:
         inputDirectory (str) : Absolute pathway to the image database
-        sampleSize (tuple(int,int)): size of the samples that are extrated from the images
+        sampleSize (tuple(int, int)): size of the samples that are extrated from the images
         whiteningFilter (numpy.array) : whitening filter
     Returns:
         averagePS (numpy.array): average power spectrum of the database samples. The axis are shifted such the low frequencies are in the center of the array (see scipy.ffpack.fftshift)
     """
+    averagePS = np.zeros(shape=sampleSize)
+    listOfFiles = os.listdir(inputDirectory)
+    for i in range(len(listOfFiles)):
+        inputFileName = inputDirectory + listOfFiles[i]
+        # print inputFileName
+        img = skimage.io.imread(inputFileName)
+        smp = PSpy.getRandomSampleImage(img, sampleSize)
+        smp = whiteningFilter * smp
+        averagePS += PSpy.getSamplePS(smp)
+    return averagePS / len(listOfFiles)
 
-def getICAInputData (inputDirectory, sampleSize,nSamples):
+def getICAInputData (inputDirectory, sampleSize, nSamples):
     """ Function that samples the input directory for later to be used by FastICA
     Args:
         inputDirectory(str):: Absolute pathway to the image database
-        sampleSize (tuple(int,int)): size of the samples that are extrated from the images
+        sampleSize (tuple(int, int)): size of the samples that are extrated from the images
         nSamples(int): number of samples that should be taken from the database
     Returns:
         X(numpy.array)nSamples, sampleSize
     """
     listOfFiles = os.listdir(inputDirectory)
     nImages = len(listOfFiles)
-    X = np.zeros([nSamples,]+sampleSize)
+    X = np.zeros([nSamples,] + sampleSize)
     for i in range(nSamples):
-        fileName = np.random.choice(listOfFiles,1)[0]
-        fullFileName = inputDirectory+fileName
+        fileName = np.random.choice(listOfFiles, 1)[0]
+        fullFileName = inputDirectory + fileName
         print fullFileName
         im = skimage.io.imread(fullFileName)
-        samplePos = PSpyFull.getSampleTopLeftCorner(0,imageSize[0]-sampleSize[0],0,imageSize[1]-sampleSize[1]);
-        sample = PSpyFull.getSampleImage(im,sampleSize,samplePos).astype("double")/256.;
+        samplePos = PSpy.getSampleTopLeftCorner(0, imageSize[0] - sampleSize[0], 0, imageSize[1] - sampleSize[1]);
+        sample = PSpy.getSampleImage(im, sampleSize, samplePos).astype("double") / 256.;
         X[i] = sample
     return X;
 
@@ -70,6 +84,9 @@ def preprocess (X):
     Returns:
         qsqX(numpy.array)
     """
+    # return np.transpose(X.reshape(X.shape[0], X.shape[1] * X.shape[2]))
+    # return X.reshape(X.shape[1] * X.shape[2], X.shape[0])
+    return X.reshape(X.shape[0], X.shape[1] * X.shape[2])
 
 def getIC (X):
     """Function that estimates the principal components of the data
@@ -78,22 +95,25 @@ def getIC (X):
     Returns:
         S(numpy.array) the matrix of the independent sources of the data
     """
+    ica = FastICA(algorithm='parallel', whiten=True)
+    return ica.fit_transform(X)
 
-def makeWhiteningFiltersFigure (whiteningFilters,figureFileName):
+def makeWhiteningFiltersFigure (whiteningFilters, figureFileName):
     pylab.figure()
-    for i,whiteningFilter in enumerate(whiteningFilters):
-        pylab.subplot(1,len(whiteningFilters),i+1)
+    for i, whiteningFilter in enumerate(whiteningFilters):
+        pylab.subplot(1, len(whiteningFilters), i + 1)
         vmax = np.max(np.abs(whiteningFilter))
         vmin = -vmax
-        pylab.imshow(whiteningFilter,cmap = 'gray',vmax = vmax, vmin = vmin)
+        pylab.imshow(whiteningFilter, cmap='gray', vmax = vmax, vmin = vmin)
         pylab.axis("off")
     pylab.savefig(figureFileName)
 
-def makeIdependentComponentsFigure (C, sampleSize,figureFileName):
-    C = C.reshape([-1,]+sampleSize)
+def makeIdependentComponentsFigure (C, sampleSize, figureFileName):
+    C = C.reshape([-1,] + sampleSize)
     pylab.figure()
-    for i in range(C.shape[0]):
-        pylab.subplot(sampleSize[0],sampleSize[1],i+1)
-        pylab.imshow(C[i],cmap = 'gray')
+    for i in range(np.min([C.shape[0], sampleSize[0] * sampleSize[1]])):
+    # for i in range(C.shape[0]):
+        pylab.subplot(sampleSize[0], sampleSize[1], i + 1)
+        pylab.imshow(C[i], cmap='gray')
         pylab.axis("off")
     pylab.savefig(figureFileName)
