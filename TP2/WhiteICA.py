@@ -5,7 +5,7 @@ import os
 import numpy as np
 import PSpy
 import pylab
-import scipy.ndimage.filters
+import scipy.ndimage.filters as filters
 import skimage.io
 from sklearn.decomposition import FastICA
 
@@ -30,10 +30,14 @@ def getPowerSpectrumWhiteningFilter (averagePS, noiseVariance):
         w(numpy.array): whitening denoising filter
     """
     sM = noiseVariance * (averagePS.shape[0] * averagePS.shape[1])
-    denoising = ((averagePS - sM) / averagePS).clip(0)
-    whitening = (1 / np.sqrt(averagePS))
-    return whitening * denoising
-    # return np.real(np.fft.ifft(truncateNonNeg(((averagePS - sM) / averagePS) / np.sqrt(averagePS))))
+    ps = np.fft.ifftshift(averagePS)
+    denoising = ((ps - sM) / ps).clip(0)
+    whitening = (1 / np.sqrt(ps))
+    F = whitening * denoising
+    F = np.fft.ifft2(F)
+    F = np.real(F)
+    F = np.fft.fftshift(F)
+    return F
 
 def getAveragePSWhitenImages (inputDirectory, sampleSize, whiteningFilter):
     """ Function that estimates the average power spectrum of a image database
@@ -51,7 +55,8 @@ def getAveragePSWhitenImages (inputDirectory, sampleSize, whiteningFilter):
         # print inputFileName
         img = skimage.io.imread(inputFileName)
         smp = PSpy.getRandomSampleImage(img, sampleSize)
-        smp = whiteningFilter * smp
+        smp = filters.convolve(smp, whiteningFilter, mode='wrap')
+        # smp = whiteningFilter * smp
         averagePS += PSpy.getSamplePS(smp)
     return averagePS / len(listOfFiles)
 
@@ -84,8 +89,6 @@ def preprocess (X):
     Returns:
         qsqX(numpy.array)
     """
-    # return np.transpose(X.reshape(X.shape[0], X.shape[1] * X.shape[2]))
-    # return X.reshape(X.shape[1] * X.shape[2], X.shape[0])
     return X.reshape(X.shape[0], X.shape[1] * X.shape[2])
 
 def getIC (X):
@@ -95,8 +98,9 @@ def getIC (X):
     Returns:
         S(numpy.array) the matrix of the independent sources of the data
     """
-    ica = FastICA(algorithm='parallel', whiten=True)
-    return ica.fit_transform(X)
+    ica = FastICA(n_components=X.shape[0], algorithm='parallel', whiten=True)
+    ica.fit_transform(X)
+    return ica.components_
 
 def makeWhiteningFiltersFigure (whiteningFilters, figureFileName):
     pylab.figure()
@@ -111,8 +115,8 @@ def makeWhiteningFiltersFigure (whiteningFilters, figureFileName):
 def makeIdependentComponentsFigure (C, sampleSize, figureFileName):
     C = C.reshape([-1,] + sampleSize)
     pylab.figure()
-    for i in range(np.min([C.shape[0], sampleSize[0] * sampleSize[1]])):
-    # for i in range(C.shape[0]):
+    # for i in range(np.min([C.shape[0], sampleSize[0] * sampleSize[1]])):
+    for i in range(C.shape[0]):
         pylab.subplot(sampleSize[0], sampleSize[1], i + 1)
         pylab.imshow(C[i], cmap='gray')
         pylab.axis("off")

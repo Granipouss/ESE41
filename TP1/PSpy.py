@@ -36,8 +36,8 @@ def getSampleImage (image, sampleSize, topLeftCorner):
     return image[topLeftCorner[0]:topLeftCorner[0] + sampleSize[0], topLeftCorner[1]:topLeftCorner[1] + sampleSize[1]]
 
 def getRandomSampleImage (image, sampleSize):
-    Xmax = imageSize[0] - sampleSize[0]
-    Ymax = imageSize[1] - sampleSize[1]
+    Xmax = image.shape[0] - sampleSize[0]
+    Ymax = image.shape[1] - sampleSize[1]
     return getSampleImage(image, sampleSize, getSampleTopLeftCorner(0, Xmax, 0, Ymax))
 
 def getSamplePS (sample):
@@ -108,7 +108,7 @@ def getRadialPS(averagePS):
     return [value[f] / amount[f] for f in radialFreq]
 
 
-def getAveragePSLocal(inputDirectory, sampleSize, gridSize):
+def getAveragePSLocal (inputDirectory, sampleSize, gridSize):
     """ Function that estimates the local average power spectrum of a image database
     Args:
         inputDirectory (str) : Absolute pathway to the image database
@@ -117,18 +117,29 @@ def getAveragePSLocal(inputDirectory, sampleSize, gridSize):
     Returns:
         averagePSLocal (numpy.array): average power spectrum of the database samples. The axis are shifted such the low frequencies are in the center of the array (see numpy.fft.fftshift)
     """
+    averagePSLocal = np.ndarray(shape=(gridSize[0],gridSize[1],sampleSize[0],sampleSize[1]))
+    for h in range(gridSize[0]):
+        for i in range(gridSize[1]):
+            for j in range(sampleSize[0]):
+                for k in range(sampleSize[1]):
+                    averagePSLocal[h][i][j][k]=0
+    listOfFiles = os.listdir(inputDirectory)
+    for i in range(len(listOfFiles)):
+        inputFileName = inputDirectory + listOfFiles[i]
+        print inputFileName
+        img = skimage.io.imread(inputFileName)
+        for j in range(gridSize[0]) :
+            for k in range(gridSize[1]):
+                topLeftCornerLocal = [j*85,k*85]
+                sampleSizeLocal = [85,85]
+                if (j==gridSize[0]-1):
+                    sampleSizeLocal[0]=86
+                if (k==gridSize[1]-1):
+                    sampleSizeLocal[1]=86
+                imgLocal = getSampleImage(img, sampleSizeLocal, topLeftCornerLocal)
+                smpLocal = getRandomSampleImage(imgLocal, sampleSize)
+                averagePSLocal[j][k] += getSamplePS(smpLocal) / len(listOfFiles)
     return averagePSLocal
-
-def getAveragePSLocal(inputDirectory, sampleSize, gridSize):
-    """ Function that estimates the local average power spectrum of a image database
-    Args:
-        inputDirectory (str) : Absolute pathway to the image database
-        sampleSize (tuple(int, int)): size of the samples that are extrated from the images
-        gridSize (tuple(int, int)): size of the grid that define the borders of each local region
-    Returns:
-        averagePSLocal (numpy.array): average power spectrum of the database samples. The axis are shifted such the low frequencies are in the center of the array (see numpy.fft.fftshift)
-    """
-    ###write your function here
 
 
 def makeAveragePSFigure (averagePS, figureFileName):
